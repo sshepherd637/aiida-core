@@ -26,7 +26,7 @@ click-completion==0.5.2
 click-config-file==0.6.0
 click-spinner==0.1.10
 configobj==5.0.6
-coverage==4.5.4
+coverage==4.5.3
 cryptography==3.4.7
 cycler==0.10.0
 debugpy==1.4.1
