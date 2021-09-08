@@ -57,9 +57,9 @@ class CliFormatter(logging.Formatter):
             prefix = None
 
         if prefix:
-            return f'{click.style(record.levelname.capitalize(), fg=fg, bold=True)}: {record.msg % record.args}'
+            return f'{click.style(record.levelname.capitalize(), fg=fg, bold=True)}: {record.msg}'
 
         if record.args:
-            return f'{record.msg % record.args}'
+            return f'{record.msg}'
 
         return record.msg
