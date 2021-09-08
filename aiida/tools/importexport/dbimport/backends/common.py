@@ -64,10 +64,10 @@ def _copy_node_repositories(*, repository_metadatas: List[Dict], reader: Archive
     with get_progress_reporter()(total=len(hashkeys), desc='Importing repository files') as progress:
         callback = create_callback(progress)
         container_export.export(
-            set(hashkeys),
+            set(hashkeys),  # type: ignore[arg-type]
             container_profile,
             compress=True,
-            callback=callback  # type: ignore[arg-type]
+            callback=callback
         )
 
 
