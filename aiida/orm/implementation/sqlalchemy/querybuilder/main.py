@@ -218,7 +218,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
         result = result[1:]
 
         if len(result) != self._requested_projections:
-            raise Exception(
+            raise AssertionError(
                 f'length of query result ({len(result)}) does not match '
                 f'the number of specified projections ({self._requested_projections})'
             )
