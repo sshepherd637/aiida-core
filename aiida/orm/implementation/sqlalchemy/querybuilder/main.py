@@ -11,7 +11,7 @@
 """Sqla query builder implementation"""
 from contextlib import contextmanager
 from functools import partial
-from typing import Any, cast, Dict, Iterable, Iterator, List, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Union
 import uuid
 import warnings
 
@@ -24,9 +24,10 @@ from sqlalchemy.orm.context import ORMCompileState, QueryContext
 from sqlalchemy.orm.query import Query
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.util import AliasedClass
-from sqlalchemy.sql.expression import case, ColumnClause, FunctionElement
+from sqlalchemy.sql.expression import case, text
 from sqlalchemy.sql.compiler import SQLCompiler, TypeCompiler
-from sqlalchemy.sql.elements import BooleanClauseList, Cast, BinaryExpression, Label
+from sqlalchemy.sql.elements import BooleanClauseList, Cast, BinaryExpression, ColumnElement, Label, ColumnClause
+from sqlalchemy.sql.functions import FunctionElement
 from sqlalchemy.orm.attributes import InstrumentedAttribute, QueryableAttribute
 from sqlalchemy.types import Integer, Float, Boolean, DateTime, String
 
@@ -228,7 +229,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
         """Return an iterator over all the results of a list of lists."""
         with self.use_query(data) as query:
 
-            for resultrow in query.yield_per(batch_size):  # pylint: disable=not-an-iterable
+            for resultrow in query.yield_per(batch_size):  # type: ignore[arg-type] # pylint: disable=not-an-iterable
                 # we discard the first item of the result row,
                 # which is what the query was initialised with
                 # and not one of the requested projection (see self._build)
@@ -239,7 +240,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
         """Return an iterator over all the results of a list of dictionaries."""
         with self.use_query(data) as query:
 
-            for row in query.yield_per(batch_size):  # pylint: disable=not-an-iterable
+            for row in query.yield_per(batch_size):  # type: ignore[arg-type] # pylint: disable=not-an-iterable
                 # build the yield result
                 yield_result: Dict[str, Dict[str, Any]] = {}
                 for tag, projected_entities_dict in self._tag_to_projected_fields.items():
@@ -259,7 +260,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
         # see: https://github.com/sqlalchemy/sqlalchemy/issues/4395#issuecomment-907293360
         # THIS CAN BE REMOVED WHEN MOVING TO THE VERSION 2 API
         existing_func = ORMCompileState.orm_setup_cursor_result
-        ORMCompileState.orm_setup_cursor_result = _orm_setup_cursor_result
+        ORMCompileState.orm_setup_cursor_result = _orm_setup_cursor_result  # type: ignore[assignment]
         query = self._update_query(data)
         try:
             yield query
@@ -267,7 +268,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
             self.get_session().close()
             raise
         finally:
-            ORMCompileState.orm_setup_cursor_result = existing_func
+            ORMCompileState.orm_setup_cursor_result = existing_func  # type: ignore[assignment]
 
     def _update_query(self, data: QueryDictType) -> Query:
         """Return the sqlalchemy.orm.Query instance for the current query specification.
@@ -429,7 +430,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
 
         # DISTINCT #################################
         if self._data['distinct']:
-            self._query = cast(Query, self._query.distinct())
+            self._query = self._query.distinct()
 
         return self._query
 
@@ -554,7 +555,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
         column_name: str,
         attrpath: List[str],
         cast: Optional[str] = None
-    ) -> InstrumentedAttribute:
+    ) -> Union[ColumnElement, InstrumentedAttribute]:
         """Return projectable entity for a given alias and column name."""
         if attrpath or column_name in ('attributes', 'extras'):
             entity = self.get_projectable_attribute(alias, column_name, attrpath, cast=cast)
@@ -563,15 +564,11 @@ class SqlaQueryBuilder(BackendQueryBuilder):
         return entity
 
     def get_projectable_attribute(
-        self,
-        alias: AliasedClass,
-        column_name: str,
-        attrpath: List[str],
-        cast: Optional[str] = None
-    ) -> InstrumentedAttribute:
+        self, alias: AliasedClass, column_name: str, attrpath: List[str], cast: Optional[str] = None
+    ) -> ColumnElement:
         """Return an attribute store in a JSON field of the give column"""
         # pylint: disable=unused-argument
-        entity = self.get_column(column_name, alias)[attrpath]
+        entity: ColumnElement = self.get_column(column_name, alias)[attrpath]
         if cast is None:
             pass
         elif cast == 'f':
@@ -612,7 +609,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
 
         :returns: an sqlalchemy expression.
         """
-        expressions = []
+        expressions: List[Any] = []
         for path_spec, filter_operation_dict in filter_spec.items():
             if path_spec in ('and', 'or', '~or', '~and', '!and', '!or'):
                 subexpressions = [
@@ -631,6 +628,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
 
                 attr_key = path_spec.split('.')[1:]
                 is_jsonb = (bool(attr_key) or column_name in ('attributes', 'extras'))
+                column: Optional[InstrumentedAttribute]
                 try:
                     column = self.get_column(column_name, alias)
                 except (ValueError, TypeError):
@@ -792,7 +790,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
             } # id is not 2
         """
         # pylint: disable=too-many-arguments, too-many-branches
-        expr = None
+        expr: Any = None
         if operator.startswith('~'):
             negation = True
             operator = operator.lstrip('~')
@@ -888,21 +886,22 @@ class SqlaQueryBuilder(BackendQueryBuilder):
             column = self.get_column(column_name, alias)
 
         database_entity = column[tuple(attr_key)]
+        expr: Any
         if operator == '==':
             type_filter, casted_entity = cast_according_to_type(database_entity, value)
-            expr = case([(type_filter, casted_entity == value)], else_=False)
+            expr = case((type_filter, casted_entity == value), else_=False)
         elif operator == '>':
             type_filter, casted_entity = cast_according_to_type(database_entity, value)
-            expr = case([(type_filter, casted_entity > value)], else_=False)
+            expr = case((type_filter, casted_entity > value), else_=False)
         elif operator == '<':
             type_filter, casted_entity = cast_according_to_type(database_entity, value)
-            expr = case([(type_filter, casted_entity < value)], else_=False)
+            expr = case((type_filter, casted_entity < value), else_=False)
         elif operator in ('>=', '=>'):
             type_filter, casted_entity = cast_according_to_type(database_entity, value)
-            expr = case([(type_filter, casted_entity >= value)], else_=False)
+            expr = case((type_filter, casted_entity >= value), else_=False)
         elif operator in ('<=', '=<'):
             type_filter, casted_entity = cast_according_to_type(database_entity, value)
-            expr = case([(type_filter, casted_entity <= value)], else_=False)
+            expr = case((type_filter, casted_entity <= value), else_=False)
         elif operator == 'of_type':
             # http://www.postgresql.org/docs/9.5/static/functions-json.html
             #  Possible types are object, array, string, number, boolean, and null.
@@ -912,33 +911,33 @@ class SqlaQueryBuilder(BackendQueryBuilder):
             expr = jsonb_typeof(database_entity) == value
         elif operator == 'like':
             type_filter, casted_entity = cast_according_to_type(database_entity, value)
-            expr = case([(type_filter, casted_entity.like(value))], else_=False)
+            expr = case((type_filter, casted_entity.like(value)), else_=False)
         elif operator == 'ilike':
             type_filter, casted_entity = cast_according_to_type(database_entity, value)
-            expr = case([(type_filter, casted_entity.ilike(value))], else_=False)
+            expr = case((type_filter, casted_entity.ilike(value)), else_=False)
         elif operator == 'in':
             type_filter, casted_entity = cast_according_to_type(database_entity, value[0])
-            expr = case([(type_filter, casted_entity.in_(value))], else_=False)
+            expr = case((type_filter, casted_entity.in_(value)), else_=False)
         elif operator == 'contains':
             expr = database_entity.cast(JSONB).contains(value)
         elif operator == 'has_key':
             expr = database_entity.cast(JSONB).has_key(value)  # noqa
         elif operator == 'of_length':
-            expr = case([
-                (jsonb_typeof(database_entity) == 'array', jsonb_array_length(database_entity.cast(JSONB)) == value)
-            ],
-                        else_=False)
+            expr = case(
+                (jsonb_typeof(database_entity) == 'array', jsonb_array_length(database_entity.cast(JSONB)) == value),
+                else_=False
+            )
 
         elif operator == 'longer':
-            expr = case([
-                (jsonb_typeof(database_entity) == 'array', jsonb_array_length(database_entity.cast(JSONB)) > value)
-            ],
-                        else_=False)
+            expr = case(
+                (jsonb_typeof(database_entity) == 'array', jsonb_array_length(database_entity.cast(JSONB)) > value),
+                else_=False
+            )
         elif operator == 'shorter':
-            expr = case([
-                (jsonb_typeof(database_entity) == 'array', jsonb_array_length(database_entity.cast(JSONB)) < value)
-            ],
-                        else_=False)
+            expr = case(
+                (jsonb_typeof(database_entity) == 'array', jsonb_array_length(database_entity.cast(JSONB)) < value),
+                else_=False
+            )
         else:
             raise ValueError(f'Unknown operator {operator} for filters in JSON field')
         return expr
@@ -1015,7 +1014,7 @@ class SqlaQueryBuilder(BackendQueryBuilder):
 
         :params literal_binds: Inline bound parameters (this is normally handled by the Python DBAPI).
         """
-        dialect = query.session.bind.dialect
+        dialect = query.session.bind.dialect  # type: ignore[union-attr]
 
         class _Compiler(dialect.statement_compiler):  # type: ignore[name-defined]
             """Override the compiler with additional literal value renderers."""
@@ -1050,17 +1049,17 @@ class SqlaQueryBuilder(BackendQueryBuilder):
 
     def analyze_query(self, data: QueryDictType, execute: bool = True, verbose: bool = False) -> str:
         with self.use_query(data) as query:
-            if query.session.bind.dialect.name != 'postgresql':
+            if query.session.bind.dialect.name != 'postgresql':  # type: ignore[union-attr]
                 raise NotImplementedError('Only PostgreSQL is supported for this method')
             compiled = self._compile_query(query, literal_binds=True)
         options = ', '.join((['ANALYZE'] if execute else []) + (['VERBOSE'] if verbose else []))
         options = f' ({options})' if options else ''
-        rows = self.get_session().execute(f'EXPLAIN{options} {compiled.string}').fetchall()
+        rows = self.get_session().execute(text(f'EXPLAIN{options} {compiled.string}')).fetchall()
         return '\n'.join(row[0] for row in rows)
 
     def get_creation_statistics(self, user_pk: Optional[int] = None) -> Dict[str, Any]:
         session = self.get_session()
-        retdict = {}
+        retdict: Dict[Any, Any] = {}
 
         total_query = session.query(self.Node)
         types_query = session.query(self.Node.node_type.label('typestring'), sa_func.count(self.Node.id))  # pylint: disable=no-member

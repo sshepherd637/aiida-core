@@ -91,6 +91,7 @@ scripts_are_modules = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 no_warn_no_return = true
+plugins = ["sqlalchemy.ext.mypy.plugin"]
 
 [[tool.mypy.overrides]]
 module = 'aiida.*'
@@ -109,8 +110,6 @@ module = [
     'numpy.*',
     'ruamel.*',
     'scipy.*',
-    'sqlalchemy.*',
-    'sqlalchemy_utils.*',
     'tqdm.*',
     'wrapt.*',
 ]
@@ -134,6 +133,7 @@ passenv =
 setenv =
     django: AIIDA_TEST_BACKEND = django
     sqla: AIIDA_TEST_BACKEND = sqlalchemy
+    SQLALCHEMY_WARN_20 = 1
 commands = pytest {posargs}
 
 [testenv:py{36,37,38,39}-verdi]
