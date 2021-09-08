@@ -332,7 +332,7 @@ class ReaderJsonBase(ArchiveReaderAbstract):
         """Return an instance mapped to the repository container."""
         self._extract(path_prefix='')
         assert self._sandbox is not None  # required by mypy
-        return Container(Path(self._sandbox.abspath) / 'container')
+        return Container(str(Path(self._sandbox.abspath) / 'container'))
 
 
 class ReaderJsonZip(ReaderJsonBase):
