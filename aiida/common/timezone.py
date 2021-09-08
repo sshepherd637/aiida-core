@@ -10,6 +10,7 @@
 """Utility functions to operate on datetime objects."""
 
 from datetime import datetime
+from dateutil.parser import parse
 import dateutil
 
 
@@ -136,4 +137,4 @@ def isoformat_to_datetime(value):
     """
     if value is None:
         return None
-    return dateutil.parser.parse(value)
+    return parse(value)
